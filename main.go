@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ver string = "0.2"
+	ver string = "0.3"
 	logDateLayout string = "2006-01-02 15:04:05"
 )
 
@@ -66,6 +66,14 @@ type SlackMessageAttachment struct {
 	Text string `json:"text,omitempty"`
 	Color string `json:"color,omitempty"`
 	MrkdwnIn []string `json:"mrkdwn_in,omitempty"`
+	Fields []SlackAttachmentField `json:"fields"`
+}
+
+// SlackAttachmentField : containts slack attachment field data
+type SlackAttachmentField struct {
+	Short bool `json:"short"`
+	Title string `json:"title"`
+	Value string `json:"value"`
 }
 
 func internalHealth(w http.ResponseWriter, req *http.Request) {
@@ -111,13 +119,29 @@ func handlePubSub(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatMessageAttributes (pubSubMessageData PubSubMessageData) string {
-	result := "*project:* " + pubSubMessageData.Resource.Labels.ProjectId +
-		"\n*category:* " + strings.Split(pubSubMessageData.ProtoPayload.ServiceName, ".")[0] +
-		"\n*resource:* " + pubSubMessageData.ProtoPayload.ResourceName +
-		"\n*operation:* " + pubSubMessageData.ProtoPayload.MethodName +
-		"\n*user:* " + pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail
+	result := []string{
+		"*project:* " + pubSubMessageData.Resource.Labels.ProjectId,
+		"*category:* " + strings.Split(pubSubMessageData.ProtoPayload.ServiceName, ".")[0],
+		"*resource:* " + pubSubMessageData.ProtoPayload.ResourceName,
+		"*operation:* " + pubSubMessageData.ProtoPayload.MethodName,
+		"*user:* " + pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail,
+	}
 
-	return result
+	var location string
+	if pubSubMessageData.Resource.Labels.Location != "" {
+		location = "*location:* " + pubSubMessageData.Resource.Labels.Location
+	} else if pubSubMessageData.Resource.Labels.Zone != "" {
+		location = "*zone:* " + pubSubMessageData.Resource.Labels.Zone
+	}
+
+	if location != "" {
+		// Insert location at second position in slice
+		result = append(result, "")
+		copy(result[2:], result[1:])
+		result[1] = location
+	}
+
+	return strings.Join(result[:],"\n")
 }
 
 func sendSlackNotification(webhookUrl string, slackRequestBody SlackRequestBody) error {
