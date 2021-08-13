@@ -46,6 +46,13 @@ type PubSubMessageData struct {
 		} `json:"authenticationInfo"`
 	} `json:"protoPayload"`
 	LogName string `json:"logName"`
+	Resource struct {
+		Labels struct {
+			ProjectId string `json:"project_id"`
+			Location string `json:"location"`
+			Zone string `json:"zone"`
+		} `json:"labels"`
+	} `json:"resource"`
 }
 
 // SlackRequestBody : containts slack request body
@@ -104,7 +111,8 @@ func handlePubSub(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatMessageAttributes (pubSubMessageData PubSubMessageData) string {
-	result := "*product:* " + pubSubMessageData.ProtoPayload.ServiceName +
+	result := "*project:* " + pubSubMessageData.Resource.Labels.ProjectId +
+		"\n*category:* " + strings.Split(pubSubMessageData.ProtoPayload.ServiceName, ".")[0] +
 		"\n*resource:* " + pubSubMessageData.ProtoPayload.ResourceName +
 		"\n*operation:* " + pubSubMessageData.ProtoPayload.MethodName +
 		"\n*user:* " + pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail
