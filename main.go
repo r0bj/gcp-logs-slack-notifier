@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ver string = "0.3"
+	ver string = "0.5"
 	logDateLayout string = "2006-01-02 15:04:05"
 )
 
@@ -46,7 +46,9 @@ type PubSubMessageData struct {
 		} `json:"authenticationInfo"`
 	} `json:"protoPayload"`
 	LogName string `json:"logName"`
+	Severity string `json:"severity"`
 	Resource struct {
+		Type string `json:"type"`
 		Labels struct {
 			ProjectId string `json:"project_id"`
 			Location string `json:"location"`
@@ -106,7 +108,8 @@ func handlePubSub(w http.ResponseWriter, r *http.Request) {
 		slackRequestBody := SlackRequestBody{
 			Attachments: []SlackMessageAttachment{
 				SlackMessageAttachment{
-					Text: formatMessageAttributes(pubSubMessageData),
+					Color: getSlackAttachmentColor(pubSubMessageData),
+					Fields: fillMessageFields(pubSubMessageData),
 				},
 			},
 		}
@@ -118,30 +121,79 @@ func handlePubSub(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func formatMessageAttributes (pubSubMessageData PubSubMessageData) string {
-	result := []string{
-		"*project:* " + pubSubMessageData.Resource.Labels.ProjectId,
-		"*category:* " + strings.Split(pubSubMessageData.ProtoPayload.ServiceName, ".")[0],
-		"*resource:* " + pubSubMessageData.ProtoPayload.ResourceName,
-		"*operation:* " + pubSubMessageData.ProtoPayload.MethodName,
-		"*user:* " + pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail,
+func getSlackAttachmentColor(pubSubMessageData PubSubMessageData) string {
+	var result string
+	// https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#LogSeverity
+	if pubSubMessageData.Severity == "INFO" ||
+			pubSubMessageData.Severity == "NOTICE" {
+		result = "good"
+	} else if pubSubMessageData.Severity == "WARNING" {
+		result = "warning"
+	} else if pubSubMessageData.Severity == "ERROR" ||
+			pubSubMessageData.Severity == "CRITICAL" ||
+			pubSubMessageData.Severity == "ALERT" ||
+			pubSubMessageData.Severity == "EMERGENCY" {
+		result = "danger"
 	}
 
-	var location string
+	return result
+}
+
+func fillMessageFields(pubSubMessageData PubSubMessageData) []SlackAttachmentField {
+	result := []SlackAttachmentField{
+		SlackAttachmentField{
+			Title: "project",
+			Value: pubSubMessageData.Resource.Labels.ProjectId,
+			Short: true,
+		},
+		SlackAttachmentField{
+			Title: "category",
+			Value: strings.Split(pubSubMessageData.ProtoPayload.ServiceName, ".")[0],
+			Short: true,
+		},
+		SlackAttachmentField{
+			Title: "user",
+			Value: pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail,
+			Short: true,
+		},
+	}
+
 	if pubSubMessageData.Resource.Labels.Location != "" {
-		location = "*location:* " + pubSubMessageData.Resource.Labels.Location
+		result = append(result, SlackAttachmentField{
+			Title: "location",
+			Value: pubSubMessageData.Resource.Labels.Location,
+			Short: true,
+		})
 	} else if pubSubMessageData.Resource.Labels.Zone != "" {
-		location = "*zone:* " + pubSubMessageData.Resource.Labels.Zone
+		result = append(result, SlackAttachmentField{
+			Title: "zone",
+			Value: pubSubMessageData.Resource.Labels.Zone,
+			Short: true,
+		})
 	}
 
-	if location != "" {
-		// Insert location at second position in slice
-		result = append(result, "")
-		copy(result[2:], result[1:])
-		result[1] = location
+	if pubSubMessageData.Resource.Type != "" {
+		result = append(result, SlackAttachmentField{
+			Title: "resource type",
+			Value: pubSubMessageData.Resource.Type,
+			Short: true,
+		})
 	}
 
-	return strings.Join(result[:],"\n")
+	result = append(result,
+		SlackAttachmentField{
+			Title: "resource",
+			Value: pubSubMessageData.ProtoPayload.ResourceName,
+			Short: false,
+		},
+		SlackAttachmentField{
+			Title: "operation",
+			Value: pubSubMessageData.ProtoPayload.MethodName,
+			Short: false,
+		},
+	)
+
+	return result
 }
 
 func sendSlackNotification(webhookUrl string, slackRequestBody SlackRequestBody) error {
