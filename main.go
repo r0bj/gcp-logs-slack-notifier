@@ -1,33 +1,33 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
-	"bytes"
-	"time"
-	"fmt"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
-	ver string = "0.5"
+	ver           string = "0.6"
 	logDateLayout string = "2006-01-02 15:04:05"
 )
 
 var (
-	verbose = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
-	port = kingpin.Flag("port", "Port to listen on.").Envar("PORT").String()
+	verbose         = kingpin.Flag("verbose", "Verbose mode.").Short('v').Bool()
+	port            = kingpin.Flag("port", "Port to listen on.").Envar("PORT").String()
 	slackWebhookUrl = kingpin.Flag("slack-webhook-url", "Slack webhook URL.").Envar("SLACK_WEBHOOK_URL").Required().String()
 )
 
 // PubSubMessage : containts PubSub message content
 type PubSubMessage struct {
 	Message struct {
-		Data []byte `json:"data"`
+		Data       []byte `json:"data"`
 		Attributes struct {
 			Timestamp string `json:"logging.googleapis.com/timestamp"`
 		} `json:"attributes"`
@@ -38,42 +38,42 @@ type PubSubMessage struct {
 // PubSubMessageData : containts PubSub message data content
 type PubSubMessageData struct {
 	ProtoPayload struct {
-		MethodName string `json:"methodName"`
-		ResourceName string `json:"resourceName"`
-		ServiceName string `json:"serviceName"`
+		MethodName         string `json:"methodName"`
+		ResourceName       string `json:"resourceName"`
+		ServiceName        string `json:"serviceName"`
 		AuthenticationInfo struct {
 			PrincipalEmail string `json:"principalEmail"`
 		} `json:"authenticationInfo"`
 	} `json:"protoPayload"`
-	LogName string `json:"logName"`
+	LogName  string `json:"logName"`
 	Severity string `json:"severity"`
 	Resource struct {
-		Type string `json:"type"`
+		Type   string `json:"type"`
 		Labels struct {
 			ProjectId string `json:"project_id"`
-			Location string `json:"location"`
-			Zone string `json:"zone"`
+			Location  string `json:"location"`
+			Zone      string `json:"zone"`
 		} `json:"labels"`
 	} `json:"resource"`
 }
 
 // SlackRequestBody : containts slack request body
 type SlackRequestBody struct {
-	Text string `json:"text,omitempty"`
+	Text        string                   `json:"text,omitempty"`
 	Attachments []SlackMessageAttachment `json:"attachments"`
 }
 
 // SlackMessageAttachment : containts slack message attachment data
 type SlackMessageAttachment struct {
-	Text string `json:"text,omitempty"`
-	Color string `json:"color,omitempty"`
-	MrkdwnIn []string `json:"mrkdwn_in,omitempty"`
-	Fields []SlackAttachmentField `json:"fields"`
+	Text     string                 `json:"text,omitempty"`
+	Color    string                 `json:"color,omitempty"`
+	MrkdwnIn []string               `json:"mrkdwn_in,omitempty"`
+	Fields   []SlackAttachmentField `json:"fields"`
 }
 
 // SlackAttachmentField : containts slack attachment field data
 type SlackAttachmentField struct {
-	Short bool `json:"short"`
+	Short bool   `json:"short"`
 	Title string `json:"title"`
 	Value string `json:"value"`
 }
@@ -108,7 +108,7 @@ func handlePubSub(w http.ResponseWriter, r *http.Request) {
 		slackRequestBody := SlackRequestBody{
 			Attachments: []SlackMessageAttachment{
 				SlackMessageAttachment{
-					Color: getSlackAttachmentColor(pubSubMessageData),
+					Color:  getSlackAttachmentColor(pubSubMessageData),
 					Fields: fillMessageFields(pubSubMessageData),
 				},
 			},
@@ -125,14 +125,14 @@ func getSlackAttachmentColor(pubSubMessageData PubSubMessageData) string {
 	var result string
 	// https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry#LogSeverity
 	if pubSubMessageData.Severity == "INFO" ||
-			pubSubMessageData.Severity == "NOTICE" {
+		pubSubMessageData.Severity == "NOTICE" {
 		result = "good"
 	} else if pubSubMessageData.Severity == "WARNING" {
 		result = "warning"
 	} else if pubSubMessageData.Severity == "ERROR" ||
-			pubSubMessageData.Severity == "CRITICAL" ||
-			pubSubMessageData.Severity == "ALERT" ||
-			pubSubMessageData.Severity == "EMERGENCY" {
+		pubSubMessageData.Severity == "CRITICAL" ||
+		pubSubMessageData.Severity == "ALERT" ||
+		pubSubMessageData.Severity == "EMERGENCY" {
 		result = "danger"
 	}
 
@@ -151,11 +151,14 @@ func fillMessageFields(pubSubMessageData PubSubMessageData) []SlackAttachmentFie
 			Value: strings.Split(pubSubMessageData.ProtoPayload.ServiceName, ".")[0],
 			Short: true,
 		},
-		SlackAttachmentField{
+	}
+
+	if pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail != "" {
+		result = append(result, SlackAttachmentField{
 			Title: "user",
 			Value: pubSubMessageData.ProtoPayload.AuthenticationInfo.PrincipalEmail,
 			Short: true,
-		},
+		})
 	}
 
 	if pubSubMessageData.Resource.Labels.Location != "" {
@@ -247,5 +250,5 @@ func main() {
 	}
 
 	log.Infof("Listening on port %s", port)
-	log.Fatal(http.ListenAndServe(":" + port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

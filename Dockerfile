@@ -1,4 +1,4 @@
-FROM golang:1.16.7 as builder
+FROM golang:1.17.1 as builder
 
 WORKDIR /workspace
 
@@ -9,7 +9,7 @@ COPY main.go .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a --ldflags '-w -extldflags "-static"' -tags netgo -installsuffix netgo -o gcp-logs-slack-notifier .
 
 
-FROM alpine:3.13 as certs
+FROM alpine:3.14 as certs
 
 RUN apk add --no-cache ca-certificates
 
